@@ -69,32 +69,77 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStart }) => {
       return getAvailableWords(selectedChars, ['noun', 'adjective', 'verb', 'conjunction']).length;
   };
 
+  // Listbox Keyboard Navigation
+  const handleKeyDown = (e: React.KeyboardEvent, char: string, index: number, allItems: string[]) => {
+      switch (e.key) {
+          case 'ArrowRight':
+          case 'ArrowDown':
+              e.preventDefault();
+              const nextIndex = (index + 1) % allItems.length;
+              const nextId = `option-${allItems[nextIndex]}`;
+              document.getElementById(nextId)?.focus();
+              break;
+          case 'ArrowLeft':
+          case 'ArrowUp':
+              e.preventDefault();
+              const prevIndex = (index - 1 + allItems.length) % allItems.length;
+              const prevId = `option-${allItems[prevIndex]}`;
+              document.getElementById(prevId)?.focus();
+              break;
+          case 'Home':
+              e.preventDefault();
+              document.getElementById(`option-${allItems[0]}`)?.focus();
+              break;
+          case 'End':
+              e.preventDefault();
+              document.getElementById(`option-${allItems[allItems.length - 1]}`)?.focus();
+              break;
+          case ' ':
+          case 'Enter':
+              e.preventDefault();
+              toggleChar(char);
+              break;
+      }
+  };
+
   return (
     <div className="setup-container">
       <h1>Nastavení psaní</h1>
       
       <div className="section">
         <h2>1. Co budeme psát?</h2>
-        <div className="mode-selector">
-            <button 
-                className={`mode-btn ${complexity === 'letters' ? 'active' : ''}`}
-                onClick={() => setComplexity('letters')}
-            >
-                Písmena
-            </button>
-            <button 
-                className={`mode-btn ${complexity === 'words' ? 'active' : ''}`}
-                onClick={() => setComplexity('words')}
-            >
-                Slova
-            </button>
-            <button 
-                className={`mode-btn ${complexity === 'numbers' ? 'active' : ''}`}
-                onClick={() => setComplexity('numbers')}
-            >
-                Čísla
-            </button>
-        </div>
+        <fieldset className="mode-selector">
+            <label className="mode-radio-wrapper">
+                <input 
+                    type="radio"
+                    name="complexity"
+                    className="mode-radio-input"
+                    checked={complexity === 'letters'}
+                    onChange={() => setComplexity('letters')}
+                />
+                <span className="mode-radio-visual">Písmena</span>
+            </label>
+            <label className="mode-radio-wrapper">
+                <input 
+                    type="radio"
+                    name="complexity"
+                    className="mode-radio-input"
+                    checked={complexity === 'words'}
+                    onChange={() => setComplexity('words')}
+                />
+                <span className="mode-radio-visual">Slova</span>
+            </label>
+            <label className="mode-radio-wrapper">
+                <input 
+                    type="radio"
+                    name="complexity"
+                    className="mode-radio-input"
+                    checked={complexity === 'numbers'}
+                    onChange={() => setComplexity('numbers')}
+                />
+                <span className="mode-radio-visual">Čísla</span>
+            </label>
+        </fieldset>
 
         {complexity !== 'numbers' && (
             <div className="subsection">
@@ -116,38 +161,55 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStart }) => {
           {getActiveSelection().length === getActivePool().length ? 'Odznačit vše' : 'Vybrat vše'}
         </button>
         
-        <div className="alphabet-grid" ref={gridRef}>
-          {getActivePool().map((char, index) => (
-            <button
+        <div 
+            className="alphabet-grid" 
+            ref={gridRef}
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label={complexity === 'numbers' ? 'Výběr čísel' : 'Výběr písmen'}
+        >
+          {getActivePool().map((char, index, all) => (
+            <div
               key={char}
-              type="button"
-              className={`letter-btn ${getActiveSelection().includes(char) ? 'selected' : ''}`}
+              id={`option-${char}`}
+              role="option"
+              aria-selected={getActiveSelection().includes(char)}
+              aria-label={char}
+              tabIndex={index === 0 ? 0 : -1} // Roving tabindex start, updated by focus
+              className="letter-option"
               onClick={() => toggleChar(char)}
-              aria-label={`Vybrat ${char}`}
-              aria-pressed={getActiveSelection().includes(char)}
+              onKeyDown={(e) => handleKeyDown(e, char, index, all)}
             >
               {char}
-            </button>
+            </div>
           ))}
         </div>
       </div>
 
       <div className="section">
         <h2>3. Styl psaní</h2>
-        <div className="mode-selector">
-            <button 
-                className={`mode-btn ${mode === 'trace' ? 'active' : ''}`}
-                onClick={() => setMode('trace')}
-            >
-                Trénink (šablona)
-            </button>
-            <button 
-                className={`mode-btn ${mode === 'blind' ? 'active' : ''}`}
-                onClick={() => setMode('blind')}
-            >
-                Zkouška (naslepo)
-            </button>
-        </div>
+        <fieldset className="mode-selector">
+            <label className="mode-radio-wrapper">
+                <input 
+                    type="radio"
+                    name="mode"
+                    className="mode-radio-input"
+                    checked={mode === 'trace'}
+                    onChange={() => setMode('trace')}
+                />
+                <span className="mode-radio-visual">Trénink (šablona)</span>
+            </label>
+            <label className="mode-radio-wrapper">
+                <input 
+                    type="radio"
+                    name="mode"
+                    className="mode-radio-input"
+                    checked={mode === 'blind'}
+                    onChange={() => setMode('blind')}
+                />
+                <span className="mode-radio-visual">Zkouška (naslepo)</span>
+            </label>
+        </fieldset>
       </div>
 
       <div className="section">

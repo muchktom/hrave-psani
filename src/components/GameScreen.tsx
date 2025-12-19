@@ -25,7 +25,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Ref to track if we are currently drawing and which touch ID controls the drawing
   const isDrawing = useRef(false);
+  const drawingTouchId = useRef<number | null>(null);
+
   const currentPath = useRef<Point[]>([]);
   const completedPaths = useRef<Point[][]>([]); 
   
@@ -41,6 +45,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
     completedPaths.current = [];
     currentPath.current = [];
     setMessage('');
+    isDrawing.current = false;
+    drawingTouchId.current = null;
     
     drawCanvas();
   }, [currentIndex]);
@@ -71,7 +77,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
         ctx.save();
         // Center text
         const fontSize = Math.min(canvas.width / (text.length * 0.8), canvas.height * 0.6);
-        ctx.font = `400 ${fontSize}px "Andika", "Comenia Script", "Lexend", sans-serif`;
+        ctx.font = `400 ${fontSize}px "Lato", "Mali", "Playwrite CZ", "Andika", "Comenia Script", "Lexend", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#d0d0d0'; // Light gray for template
@@ -104,11 +110,31 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
     }
   };
 
-  const getPoint = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent): Point => {
+  const getPoint = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent, touchId?: number | null): Point | null => {
       const canvas = canvasRef.current!;
       const rect = canvas.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+      
+      let clientX, clientY;
+
+      if ('touches' in e) {
+          // Touch event
+          let touch = e.touches[0]; // Default to first touch
+          
+          if (touchId !== undefined && touchId !== null) {
+            // Find specific touch by ID
+            const found = Array.from(e.touches).find(t => t.identifier === touchId);
+            if (!found) return null; // The drawing finger was lifted or lost
+            touch = found;
+          }
+          
+          clientX = touch.clientX;
+          clientY = touch.clientY;
+      } else {
+          // Mouse event
+          clientX = (e as MouseEvent).clientX;
+          clientY = (e as MouseEvent).clientY;
+      }
+
       return {
           x: clientX - rect.left,
           y: clientY - rect.top
@@ -116,24 +142,49 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
   };
 
   const handleStartDraw = (e: React.MouseEvent | React.TouchEvent) => {
+      // If we are already drawing, ignore new touches (prevent multitouch reset)
+      if (isDrawing.current) return;
+      
       e.preventDefault();
+      
+      if ('touches' in e) {
+          // Track the identifier of the touch that started drawing
+          drawingTouchId.current = e.changedTouches[0].identifier;
+      } else {
+          drawingTouchId.current = null;
+      }
+
       isDrawing.current = true;
-      const p = getPoint(e);
-      currentPath.current = [p];
-      drawCanvas();
+      const p = getPoint(e, drawingTouchId.current);
+      if (p) {
+          currentPath.current = [p];
+          drawCanvas();
+      }
   };
 
   const handleMoveDraw = (e: React.MouseEvent | React.TouchEvent) => {
       if (!isDrawing.current) return;
       e.preventDefault();
-      const p = getPoint(e);
-      currentPath.current.push(p);
-      drawCanvas();
+      
+      const p = getPoint(e, drawingTouchId.current);
+      if (p) {
+          currentPath.current.push(p);
+          drawCanvas();
+      }
   };
 
-  const handleEndDraw = () => {
+  const handleEndDraw = (e: React.MouseEvent | React.TouchEvent) => {
       if (!isDrawing.current) return;
+      
+      // For touch events, only end if the *drawing* touch ended
+      if ('changedTouches' in e && drawingTouchId.current !== null) {
+          const endedTouch = Array.from(e.changedTouches).find(t => t.identifier === drawingTouchId.current);
+          if (!endedTouch) return; // Some other finger lifted, keep drawing
+      }
+
       isDrawing.current = false;
+      drawingTouchId.current = null;
+
       if (currentPath.current.length > 5) {
           completedPaths.current.push(currentPath.current);
       }
@@ -208,7 +259,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
       // Draw Target Mask (Filled)
       vCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
       vCtx.fillStyle = '#000';
-      vCtx.font = `400 ${fontSize}px "Andika", "Comenia Script", "Lexend", sans-serif`;
+      vCtx.font = `400 ${fontSize}px "Lato", "Mali", "Playwrite CZ", "Andika", "Comenia Script", "Lexend", sans-serif`;
       vCtx.textAlign = 'center';
       vCtx.textBaseline = 'middle';
       vCtx.fillText(text, vCanvas.width / 2, vCanvas.height / 2);
@@ -289,7 +340,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
       // Determine stem width roughly (e.g. 1/5 of font size)
       // We want the brush to be slightly wider than the stem to ensure coverage
       // Made slightly stricter (smaller brush) to require better centering
-      const validationWidth = Math.max(15, fontSize / 5); 
+      const validationWidth = Math.max(12, fontSize / 6); 
       
       vCtx.lineWidth = validationWidth;
       vCtx.strokeStyle = '#fff';
@@ -328,8 +379,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ items, settings, onCompl
       // Criteria:
       // Blind mode needs to be much more lenient because exact shape matching is hard without a guide
       const isBlind = settings.mode === 'blind';
-      const minCompleteness = isBlind ? 0.60 : 0.90;
-      const maxError = isBlind ? 0.45 : 0.20;
+      const minCompleteness = isBlind ? 0.70 : 0.95;
+      const maxError = isBlind ? 0.35 : 0.15;
 
       if (completeness > minCompleteness && errorRate < maxError) {
       handleSuccess();
